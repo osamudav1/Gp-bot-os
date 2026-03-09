@@ -7,6 +7,7 @@ import psutil
 import re
 from datetime import datetime, timedelta
 from typing import Union, Optional
+from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command, CommandObject
@@ -21,11 +22,13 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from contextlib import suppress
 
+load_dotenv()
+
 # ==================== CONFIGURATION ====================
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
-OWNER_ID = 123456789  # Your Telegram ID
-MONGO_URI = "mongodb+srv://username:password@cluster.mongodb.net"
-DB_NAME = "group_management_bot"
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+OWNER_ID = int(os.environ.get("OWNER_ID", "0"))
+MONGO_URI = os.environ.get("MONGO_URI", "")
+DB_NAME = os.environ.get("DB_NAME", "group_management_bot")
 
 # Settings
 LEVEL_MULTIPLIER = 100  # 100 messages = Level 1
