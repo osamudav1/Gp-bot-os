@@ -18,7 +18,6 @@ from aiogram.types import (
 )
 from aiogram.enums import ChatType, ChatMemberStatus
 from aiogram.exceptions import TelegramRetryAfter, TelegramBadRequest
-from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from contextlib import suppress
 
@@ -181,7 +180,7 @@ db = Database()
 # ==================== INIT BOT ====================
 bot = Bot(
     token=BOT_TOKEN,
-    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+    parse_mode=ParseMode.HTML
 )
 dp = Dispatcher()
 
@@ -870,4 +869,34 @@ async def handle_forwarding(message: Message):
         
         # Auto mute if max warns
         if warns >= MAX_WARNS:
-            until_date = datetime.now() + timedelta(seconds=MUTE
+            until_date = datetime.now() + timedelta(seconds=MUTE_DURATION)
+            try:
+                await bot.restrict_chat_member(
+                    message.chat.id,
+                    message.from_user.id,
+                    permissions=ChatPermissions(can_send_messages=False),
+                    until_date=until_date
+                )
+                await message.reply(
+                    f"🔇 {message.from_user.mention_html()} has been auto-muted for "
+                    f"{MUTE_DURATION // 60} minutes due to exceeding warn limit."
+                )
+            except Exception:
+                pass
+
+# ==================== MAIN ====================
+
+async def main():
+    if not BOT_TOKEN:
+        logger.error("BOT_TOKEN is not set. Please add it to your environment secrets.")
+        return
+    if not MONGO_URI:
+        logger.error("MONGO_URI is not set. Please add it to your environment secrets.")
+        return
+
+    await db.connect()
+    logger.info("Starting bot...")
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
