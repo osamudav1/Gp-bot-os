@@ -19,6 +19,8 @@ from aiogram.types import (
 from aiogram.enums import ChatType, ChatMemberStatus
 from aiogram.exceptions import TelegramRetryAfter, TelegramBadRequest
 from aiogram.enums import ParseMode
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from contextlib import suppress
 
 load_dotenv()
@@ -190,6 +192,7 @@ class Keyboards:
     def main_menu():
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="👥 My Groups", callback_data="my_groups")],
+            [InlineKeyboardButton(text="➕ Add Groups", callback_data="add_group")],
             [InlineKeyboardButton(text="📊 Stats", callback_data="bot_stats")],
             [InlineKeyboardButton(text="⚙️ Settings", callback_data="main_settings")],
             [InlineKeyboardButton(text="📢 Broadcast", callback_data="broadcast_menu")],
@@ -330,6 +333,10 @@ class Utils:
 
 utils = Utils()
 
+# ==================== STATES ====================
+class AddGroupState(StatesGroup):
+    waiting_for_group_id = State()
+
 # ==================== HANDLERS ====================
 
 # Start command - Main Menu
@@ -363,6 +370,84 @@ async def main_menu_callback(callback: CallbackQuery):
         reply_markup=Keyboards.main_menu()
     )
     await callback.answer()
+
+@dp.callback_query(F.data == "add_group")
+async def add_group_callback(callback: CallbackQuery, state: FSMContext):
+    await callback.message.edit_text(
+        "📝 <b>Add Group</b>\n\n"
+        "Please send me the Group ID of the group you want to add.\n\n"
+        "ℹ️ You must be an admin in that group.\n"
+        "You can find the group ID by:\n"
+        "1. Forwarding a message from the group to @userinfobot\n"
+        "2. Or asking in the group's description",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="🔙 Cancel", callback_data="main_menu")
+        ]])
+    )
+    await state.set_state(AddGroupState.waiting_for_group_id)
+    await callback.answer()
+
+@dp.message(AddGroupState.waiting_for_group_id)
+async def process_group_id(message: Message, state: FSMContext):
+    try:
+        group_id = int(message.text)
+    except ValueError:
+        await message.reply("❌ Invalid group ID. Please send a valid number.")
+        return
+    
+    try:
+        member = await bot.get_chat_member(group_id, message.from_user.id)
+        is_admin = member.status in ["administrator", "creator"]
+        
+        if not is_admin and message.from_user.id != OWNER_ID:
+            await message.reply(
+                f"❌ <b>Access Denied</b>\n\n"
+                f"You must be an admin in that group to add it.\n"
+                f"Group ID: <code>{group_id}</code>"
+            )
+            await state.clear()
+            return
+        
+        group_info = await bot.get_chat(group_id)
+        group_title = group_info.title or f"Group {group_id}"
+        member_count = await bot.get_chat_member_count(group_id)
+        
+        await db.update_group(group_id, {
+            "title": group_title,
+            "member_count": member_count,
+            "owner_id": message.from_user.id,
+            "added_at": datetime.utcnow(),
+            "anti_forward": False
+        })
+        
+        await message.reply(
+            f"✅ <b>Group Added Successfully!</b>\n\n"
+            f"📁 Group: {group_title}\n"
+            f"🆔 ID: <code>{group_id}</code>\n"
+            f"👥 Members: {member_count}\n\n"
+            f"The group is now connected to the bot.",
+            reply_markup=Keyboards.main_menu()
+        )
+        
+        await utils.send_log(
+            bot,
+            "GROUP_ADDED",
+            f"User {message.from_user.mention_html()} added group: {group_title} ({group_id})"
+        )
+        
+    except Exception as e:
+        error_msg = str(e)
+        await message.reply(
+            f"❌ <b>Error</b>\n\n"
+            f"Failed to add group: {error_msg}\n\n"
+            f"Make sure:\n"
+            f"• The group ID is correct\n"
+            f"• The bot is in the group\n"
+            f"• The bot is an admin in the group\n"
+            f"• You are an admin in the group"
+        )
+    
+    await state.clear()
 
 @dp.callback_query(F.data == "my_groups")
 async def my_groups_callback(callback: CallbackQuery):

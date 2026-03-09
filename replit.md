@@ -4,6 +4,7 @@ A Python-based Telegram bot built with aiogram 3.3.0 for managing Telegram group
 
 ## Features
 
+- **Add Groups** - Admin users can add groups by providing group ID (auto-verifies admin status)
 - CAPTCHA verification for new members
 - User warning system (auto-mute after max warns)
 - Mute / Unmute / Ban / Unban commands
